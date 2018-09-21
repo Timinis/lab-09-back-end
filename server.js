@@ -17,40 +17,41 @@ const PORT = process.env.PORT;
 
 //Object Creators to send to front-end
 
-const locationCreator = (req, result) => ({
-  table_name: 'locations',
-  search_query: req.query.data,
-  formatted_query: result.body.results[0].formatted_address,
-  latitude: result.body.results[0].geometry.location.lat,
-  longitude: result.body.results[0].geometry.location.lng,
-  created_at: Date.now()
-});
+function Location(req, result) {
+  this.table_name = 'locations';
+  this.search_query = req.query.data;
+  this.formatted_query = result.body.results[0].formatted_address;
+  this.latitude = result.body.results[0].geometry.location.lat;
+  this.longitude = result.body.results[0].geometry.location.lng;
+  this.created_at = Date.now();
+}
 
-const weatherCreator = day => ({
-  forecast: day.summary,
-  time: new Date(day.time * 1000).toString().slice(0, 15),
-  created_at: Date.now()
-});
+function Weather(day) {
+  this.table_name = 'weathers';
+  this.forecast = day.summary;
+  this.time = new Date(day.time * 1000).toString().slice(0, 15);
+  this.created_at = Date.now();
+}
 
-const yelpCreator = food => ({
-  name: food.name,
-  image_url: food.image_url,
-  price: food.price,
-  rating: food.rating,
-  url: food.url,
-  created_at: Date.now()
-});
+function Yelp(food) {
+  this.name = food.name;
+  this.image_url = food.image_url;
+  this.price = food.price;
+  this.rating = food.rating;
+  this.url = food.url;
+  this.created_at = Date.now();
+}
 
-const moviesCreator = movies => ({
-  title: movies.title,
-  overview: movies.overview,
-  average_votes: movies.vote_average,
-  total_votes: movies.vote_count,
-  image_url: movies.poster_path,
-  popularity: movies.popularity,
-  released_on: movies.release_date,
-  created_at: Date.now()
-});
+function Movie(movies) {
+  this.title = movies.title;
+  this.overview = movies.overview;
+  this.average_votes = movies.vote_average;
+  this.total_votes = movies.vote_count;
+  this.image_url = movies.poster_path;
+  this.popularity = movies.popularity;
+  this.released_on = movies.release_date;
+  this.created_at = Date.now();
+}
 
 //Function to check if data exists in SQL
 
@@ -79,19 +80,20 @@ const returnCache = result => {
 
 //Function to store cache
 
-const saveToLocation = location => {
+Location.prototype.save = () => {
+  console.log(this, 'this is this');
   const SQL = `INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING RETURNING id;`;
   const values = [
-    location.search_query,
-    location.formatted_query,
-    location.latitude,
-    location.longitude
+    this.search_query,
+    this.formatted_query,
+    this.latitude,
+    this.longitude
   ];
   return client
     .query(SQL, values)
     .then(result => {
-      location.id = result.rows[0].id;
-      return location;
+      this.id = result.rows[0].id;
+      return this;
     })
     .catch(console.error);
 };
@@ -102,15 +104,16 @@ const displayAndStoreLocation = (request, response) => {
   const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${
     request.query.data
   }&key=${process.env.GOOGLE_API_KEY}`;
-  superagent
+  return superagent
     .get(url)
     .then(result => {
-      const locationResult = locationCreator(request, result);
-      saveToLocation(locationResult).then(locationResult =>
-        response.send(locationResult)
-      );
+      const locationResult = new Location(request, result);
+      console.log(locationResult, 'this is an object');
+      locationResult
+        .save()
+        .then(locationResult => response.send(locationResult));
     })
-    .catch(error => handleError(error, response));
+    .catch(error => handleError(error));
 };
 
 const getWeatherAndSave = (request, response) => {
@@ -121,7 +124,7 @@ const getWeatherAndSave = (request, response) => {
     .get(url)
     .then(result => {
       response.send(
-        result.body.daily.data.map(element => weatherCreator(element))
+        result.body.daily.data.map(element => new Weather(element))
       );
     })
     .catch(error => handleError(error, response));
@@ -135,9 +138,7 @@ const getYelpAndSave = (request, response) => {
     .get(url)
     .set('Authorization', `Bearer ${process.env.YELP_API_KEY}`)
     .then(result => {
-      response.send(
-        result.body.businesses.map(element => yelpCreator(element))
-      );
+      response.send(result.body.businesses.map(element => new Yelp(element)));
     })
     .catch(error => handleError(error, response));
 };
@@ -149,7 +150,7 @@ const getMoviesAndSave = (request, response) => {
   superagent
     .get(url)
     .then(result => {
-      response.send(result.body.results.map(element => moviesCreator(element)));
+      response.send(result.body.results.map(element => new Movie(element)));
     })
     .catch(error => handleError(error, response));
 };
