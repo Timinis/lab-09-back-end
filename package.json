@@ -1,0 +1,32 @@
+{
+  "name": "lab-09-back-end",
+  "version": "1.0.0",
+  "description": "lab-09 caching",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Timinis/lab-09-back-end.git"
+  },
+  "keywords": [
+    "caching",
+    "sql",
+    "database"
+  ],
+  "author": "Timothy Li, David Chambers",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Timinis/lab-09-back-end/issues"
+  },
+  "homepage": "https://github.com/Timinis/lab-09-back-end#readme",
+  "dependencies": {
+    "cors": "^2.8.4",
+    "dotenv": "^6.0.0",
+    "express": "^4.16.3",
+    "pg": "^7.4.3",
+    "superagent": "^4.0.0-beta.5"
+  }
+}
