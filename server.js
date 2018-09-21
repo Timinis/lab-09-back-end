@@ -55,16 +55,18 @@ function Movie(movies) {
 
 //Function to check if data exists in SQL
 
-const lookupLocation = location => {
+Location.lookupLocation = function(request, response) {
   const SQL = `SELECT * FROM locations WHERE search_query=$1;`;
-  const values = [location.query];
+  const values = [request.query.data];
   return client
     .query(SQL, values)
+    .then(console.log(values, 'this is the values'))
     .then(result => {
+      console.log(result, 'this is a SQL returned');
       if (result.rowCount > 0) {
-        returnCache(result);
+        response.send(result.rows[0]);
       } else {
-        //getLocationAndSave();
+        displayAndStoreLocation(request, response);
       }
     })
     .catch(console.error);
@@ -74,13 +76,9 @@ const lookupLocation = location => {
 
 //Function to send back sql result if data is not outdated
 
-const returnCache = result => {
-  response.send(result);
-};
-
 //Function to store cache
 
-Location.prototype.save = () => {
+Location.prototype.save = function() {
   console.log(this, 'this is this');
   const SQL = `INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING RETURNING id;`;
   const values = [
@@ -164,7 +162,7 @@ const handleError = (err, res) => {
 
 //Use the add listener
 
-app.get('/location', displayAndStoreLocation);
+app.get('/location', Location.lookupLocation);
 
 app.get('/weather', getWeatherAndSave);
 
