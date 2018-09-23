@@ -53,7 +53,7 @@ function Movie(movies) {
   this.created_at = Date.now();
 }
 
-//Function to check if data exists in SQL
+//Function to check if data exists in SQL and send it to client side
 
 Location.lookupLocation = function(request, response) {
   const SQL = `SELECT * FROM locations WHERE search_query=$1;`;
