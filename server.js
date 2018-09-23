@@ -9,7 +9,6 @@ require('dotenv').config();
 
 const client = new pg.Client(process.env.DATABASE_URL);
 const app = express();
-console.log('access to database');
 app.use(cors());
 client.connect();
 
@@ -34,6 +33,7 @@ function Weather(day) {
 }
 
 function Yelp(food) {
+  this.table_name = 'restaurants';
   this.name = food.name;
   this.image_url = food.image_url;
   this.price = food.price;
@@ -43,16 +43,25 @@ function Yelp(food) {
 }
 
 function Movie(movies) {
+  this.table_name = 'movies';
   this.title = movies.title;
   this.overview = movies.overview;
   this.average_votes = movies.vote_average;
   this.total_votes = movies.vote_count;
-  this.image_url = movies.poster_path;
+  this.image_url = `https://image.tmdb.org/t/p/w500${movies.poster_path}`;
   this.popularity = movies.popularity;
   this.released_on = movies.release_date;
   this.created_at = Date.now();
 }
 
+function Meetup(meetup) {
+  this.table_name = 'meetups';
+  this.name = meetup.name;
+  this.link = meetup.link;
+  this.host = meetup.host;
+  this.created_at = Date.now();
+  this.creation_date = meetup.creation_date;
+}
 //Function to check if data exists in SQL and send it to client side
 
 Location.lookupLocation = function(request, response) {
@@ -60,9 +69,7 @@ Location.lookupLocation = function(request, response) {
   const values = [request.query.data];
   return client
     .query(SQL, values)
-    .then(console.log(values, 'this is the values'))
     .then(result => {
-      console.log(result, 'this is a SQL returned');
       if (result.rowCount > 0) {
         response.send(result.rows[0]);
       } else {
@@ -72,14 +79,70 @@ Location.lookupLocation = function(request, response) {
     .catch(console.error);
 };
 
-//Functiion to delete sql if data is outdated
+const lookup = function(request, response, table_name, cacheHit, cacheMiss) {
+  const SQL = `SELECT * FROM ${table_name} WHERE location_id=$1;`;
+  const values = [request.query.data.id];
+  client
+    .query(SQL, values)
+    .then(result => {
+      if (result.rowCount > 0) {
+        cacheHit(request, response, result.rows);
+      } else {
+        cacheMiss(request, response);
+      }
+    })
+    .catch(console.error);
+};
 
+//Functiion to delete sql if data is outdated
+const deleteByLocationId = (table, city) => {
+  const SQL = `DELETE from ${table} WHERE location_id=${city};`;
+  client
+    .query(SQL)
+    .then(result => {
+      return result;
+    })
+    .catch(console.error);
+};
+
+//Cachehit function
+const cacheHitWeather = (request, response, resultsArray) => {
+  let ageOfResultsInMinutes =
+    (Date.now() - resultsArray[0].created_at) / (1000 * 60);
+  if (ageOfResultsInMinutes > 30) {
+    deleteByLocationId('weathers', request.query.data.id);
+    getWeatherAndSave(request, response);
+  } else {
+    response.send(resultsArray);
+  }
+};
+
+const cacheHitRestaurants = (request, response, resultsArray) => {
+  let ageOfResultsInMinutes =
+    (Date.now() - resultsArray[0].created_at) / (1000 * 60);
+  if (ageOfResultsInMinutes > 10080) {
+    deleteByLocationId('restaurants', request.query.data.id);
+    getYelpAndSave(request, response);
+  } else {
+    response.send(resultsArray);
+  }
+};
+
+const cacheHitMovie = (request, response, resultsArray) => {
+  let ageOfResultsInMinutes =
+    (Date.now() - resultsArray[0].created_at) / (1000 * 60);
+  if (ageOfResultsInMinutes > 10080 * 2) {
+    deleteByLocationId('movies', request.query.data.id);
+    getYelpAndSave(request, response);
+  } else {
+    response.send(resultsArray);
+  }
+};
 //Function to send back sql result if data is not outdated
 
 //Function to store cache
 
 Location.prototype.save = function() {
-  console.log(this, 'this is this');
   const SQL = `INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING RETURNING id;`;
   const values = [
     this.search_query,
@@ -96,6 +159,47 @@ Location.prototype.save = function() {
     .catch(console.error);
 };
 
+Weather.prototype.save = function(location_id) {
+  const SQL = `INSERT INTO ${
+    this.table_name
+  } (forecast, time, created_at, location_id) VALUES ($1, $2, $3, $4);`;
+  const values = [this.forecast, this.time, this.created_at, location_id];
+  client.query(SQL, values).catch(console.error);
+};
+
+Yelp.prototype.save = function(location_id) {
+  const SQL = `INSERT INTO ${
+    this.table_name
+  } (name, image_url, price, rating, url, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7);`;
+  const values = [
+    this.name,
+    this.image_url,
+    this.price,
+    this.rating,
+    this.url,
+    this.created_at,
+    location_id
+  ];
+  client.query(SQL, values).catch(console.error);
+};
+
+Movie.prototype.save = function(location_id) {
+  const SQL = `INSERT INTO ${
+    this.table_name
+  } (title, overview, average_votes, total_votes, image_url, popularity, released_on, created_at, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);`;
+  const values = [
+    this.title,
+    this.overview,
+    this.average_votes,
+    this.total_votes,
+    this.image_url,
+    this.popularity,
+    this.released_on,
+    this.created_at,
+    location_id
+  ];
+  client.query(SQL, values).catch(console.error);
+};
 //The function to call API display it and store it
 
 const displayAndStoreLocation = (request, response) => {
@@ -106,10 +210,10 @@ const displayAndStoreLocation = (request, response) => {
     .get(url)
     .then(result => {
       const locationResult = new Location(request, result);
-      console.log(locationResult, 'this is an object');
       locationResult
         .save()
-        .then(locationResult => response.send(locationResult));
+        .then(locationResult => response.send(locationResult))
+        .catch(console.error);
     })
     .catch(error => handleError(error));
 };
@@ -121,9 +225,12 @@ const getWeatherAndSave = (request, response) => {
   return superagent
     .get(url)
     .then(result => {
-      response.send(
-        result.body.daily.data.map(element => new Weather(element))
-      );
+      const weatherResult = result.body.daily.data.map(element => {
+        const summary = new Weather(element);
+        summary.save(request.query.data.id);
+        return summary;
+      });
+      response.send(weatherResult);
     })
     .catch(error => handleError(error, response));
 };
@@ -136,7 +243,12 @@ const getYelpAndSave = (request, response) => {
     .get(url)
     .set('Authorization', `Bearer ${process.env.YELP_API_KEY}`)
     .then(result => {
-      response.send(result.body.businesses.map(element => new Yelp(element)));
+      const yelpResult = result.body.businesses.map(element => {
+        const summary = new Yelp(element);
+        summary.save(request.query.data.id);
+        return summary;
+      });
+      response.send(yelpResult);
     })
     .catch(error => handleError(error, response));
 };
@@ -148,7 +260,12 @@ const getMoviesAndSave = (request, response) => {
   superagent
     .get(url)
     .then(result => {
-      response.send(result.body.results.map(element => new Movie(element)));
+      const movieReult = result.body.results.map(element => {
+        const summary = new Movie(element);
+        summary.save(request.query.data.id);
+        return summary;
+      });
+      response.send(movieReult);
     })
     .catch(error => handleError(error, response));
 };
@@ -158,17 +275,21 @@ const handleError = (err, res) => {
   if (res) res.status(500).send('Sorry, something went wrong');
 };
 
-//Final function to call it all with logic statement
-
 //Use the add listener
 
 app.get('/location', Location.lookupLocation);
 
-app.get('/weather', getWeatherAndSave);
+app.get('/weather', (request, response) =>
+  lookup(request, response, 'weathers', cacheHitWeather, getWeatherAndSave)
+);
 
-app.get('/yelp', getYelpAndSave);
+app.get('/yelp', (request, response) => {
+  lookup(request, response, 'restaurants', cacheHitRestaurants, getYelpAndSave);
+});
 
-app.get('/movies', getMoviesAndSave);
+app.get('/movies', (request, response) => {
+  lookup(request, response, 'movies', cacheHitMovie, getMoviesAndSave);
+});
 
 //Waiting on Port
 
