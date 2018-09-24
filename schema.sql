@@ -47,3 +47,18 @@ CREATE TABLE IF NOT EXISTS meetups (
   creation_date VARCHAR(255),
   location_id INTEGER NOT NULL REFERENCES locations(id)
 );
+
+CREATE TABLE IF NOT EXISTS trails (
+  id SERIAL PRIMARY KEY,
+  trail_url VARCHAR(8000),
+  name VARCHAR(255),
+  location VARCHAR(255),
+  length NUMERIC(4,2),
+  condition_date VARCHAR(8000),
+  condition_time VARCHAR(8000),
+  conditions VARCHAR(255),
+  stars NUMERIC(4,2),
+  star_votes BIGINT,
+  summary VARCHAR(255),
+  location_id INTEGER NOT NULL REFERENCES locations(id)
+)
