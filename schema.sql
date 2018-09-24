@@ -38,3 +38,12 @@ CREATE TABLE IF NOT EXISTS movies (
   location_id INTEGER NOT NULL REFERENCES locations(id)
 );
 
+CREATE TABLE IF NOT EXISTS meetups (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255),
+  link VARCHAR(8000),
+  host VARCHAR(255),
+  created_at BIGINT,
+  creation_date VARCHAR(255),
+  location_id INTEGER NOT NULL REFERENCES locations(id)
+);
