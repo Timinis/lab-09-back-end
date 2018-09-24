@@ -58,9 +58,18 @@ function Meetup(meetup) {
   this.table_name = 'meetups';
   this.name = meetup.name;
   this.link = meetup.link;
-  this.host = meetup.host;
+  this.host = meetup.group.name;
   this.created_at = Date.now();
-  this.creation_date = meetup.creation_date;
+  this.creation_date = meetup.local_date;
+}
+
+function Trails(trail){
+  this.table_name = 'trails';
+  this.trail_url = ;
+  this.name= ;
+  this.location = ;
+  this.length = ;
+  this.
 }
 //Function to check if data exists in SQL and send it to client side
 
@@ -138,6 +147,18 @@ const cacheHitMovie = (request, response, resultsArray) => {
     response.send(resultsArray);
   }
 };
+
+const cacheHitMeetup = (request, response, resultsArray) => {
+  let ageOfResultsInMinutes =
+    (Date.now() - resultsArray[0].created_at) / (1000 * 60);
+  if (ageOfResultsInMinutes > 60 * 24) {
+    deleteByLocationId('movies', request.query.data.id);
+    getYelpAndSave(request, response);
+  } else {
+    response.send(resultsArray);
+  }
+};
+
 //Function to send back sql result if data is not outdated
 
 //Function to store cache
@@ -196,6 +217,21 @@ Movie.prototype.save = function(location_id) {
     this.popularity,
     this.released_on,
     this.created_at,
+    location_id
+  ];
+  client.query(SQL, values).catch(console.error);
+};
+
+Meetup.prototype.save = function(location_id) {
+  const SQL = `INSERT INTO ${
+    this.table_name
+  } (name, link, host, created_at, creation_date, location_id) VALUES ($1, $2, $3, $4, $5, $6);`;
+  const values = [
+    this.name,
+    this.link,
+    this.host,
+    this.created_at,
+    this.creation_date,
     location_id
   ];
   client.query(SQL, values).catch(console.error);
@@ -270,6 +306,27 @@ const getMoviesAndSave = (request, response) => {
     .catch(error => handleError(error, response));
 };
 
+const getMeetupAndSave = (request, response) => {
+  const url = `https://api.meetup.com/find/upcoming_events?&sign=true&photo-host=public&page=20&key=${
+    process.env.MEETUP_API_KEY
+  }&lat=${request.query.data.latitude}&lon=${request.query.data.longitude}`;
+  superagent
+    .get(url)
+    .then(result => {
+      const meetupResult = result.body.events.map(element => {
+        const summary = new Meetup(element);
+        summary.save(request.query.data.id);
+        return summary;
+      });
+      response.send(meetupResult);
+    })
+    .catch(error => handleError(error, response));
+};
+
+const getTrailsAndSave = (request, response) => {
+  const url = `https://www.hikingproject.com/data/get-trails?lat=${request.query.data.latitude}&lon=${request.query.data.longitude}&maxDistance=10&key=${process.env.TRAILS_API_KEY}`
+
+}
 const handleError = (err, res) => {
   console.error(err);
   if (res) res.status(500).send('Sorry, something went wrong');
@@ -291,6 +348,9 @@ app.get('/movies', (request, response) => {
   lookup(request, response, 'movies', cacheHitMovie, getMoviesAndSave);
 });
 
+app.get('/meetups', (request, response) => {
+  lookup(request, response, 'meetups', cacheHitMeetup, getMeetupAndSave);
+});
 //Waiting on Port
 
 app.listen(PORT, () => console.log(`Listening on ${PORT}`));
