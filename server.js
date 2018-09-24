@@ -63,13 +63,18 @@ function Meetup(meetup) {
   this.creation_date = meetup.local_date;
 }
 
-function Trails(trail){
+function Trails(trail) {
   this.table_name = 'trails';
-  this.trail_url = ;
-  this.name= ;
-  this.location = ;
-  this.length = ;
-  this.
+  this.trail_url = trail.url;
+  this.name = trail.name;
+  this.location = trail.location;
+  this.length = trail.length;
+  this.condition_date = trail.conditionDate.split(' ')[0];
+  this.condition_time = trail.conditionDate.split(' ')[1];
+  this.conditions = trail.conditionStatus;
+  this.stars = trail.stars;
+  this.star_votes = trail.starVotes;
+  this.summary = trail.summary;
 }
 //Function to check if data exists in SQL and send it to client side
 
@@ -91,6 +96,8 @@ Location.lookupLocation = function(request, response) {
 const lookup = function(request, response, table_name, cacheHit, cacheMiss) {
   const SQL = `SELECT * FROM ${table_name} WHERE location_id=$1;`;
   const values = [request.query.data.id];
+  console.log(SQL, 'this is SQL');
+  console.log(values, 'this is values');
   client
     .query(SQL, values)
     .then(result => {
@@ -152,13 +159,23 @@ const cacheHitMeetup = (request, response, resultsArray) => {
   let ageOfResultsInMinutes =
     (Date.now() - resultsArray[0].created_at) / (1000 * 60);
   if (ageOfResultsInMinutes > 60 * 24) {
-    deleteByLocationId('movies', request.query.data.id);
+    deleteByLocationId('meetup', request.query.data.id);
     getYelpAndSave(request, response);
   } else {
     response.send(resultsArray);
   }
 };
 
+const cacheHitTrails = (request, response, resultsArray) => {
+  let ageOfResultsInMinutes =
+    (Date.now() - resultsArray[0].created_at) / (1000 * 60);
+  if (ageOfResultsInMinutes > 60 * 24) {
+    deleteByLocationId('trails', request.query.data.id);
+    getTrailsAndSave(request, response);
+  } else {
+    response.send(resultsArray);
+  }
+};
 //Function to send back sql result if data is not outdated
 
 //Function to store cache
@@ -232,6 +249,26 @@ Meetup.prototype.save = function(location_id) {
     this.host,
     this.created_at,
     this.creation_date,
+    location_id
+  ];
+  client.query(SQL, values).catch(console.error);
+};
+
+Trails.prototype.save = function(location_id) {
+  const SQL = `INSERT INTO ${
+    this.table_name
+  } (trail_url, name, location, length, condition_date, condition_time, conditions, stars, star_votes, summary, location_id) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);`;
+  const values = [
+    this.trail_url,
+    this.name,
+    this.location,
+    this.length,
+    this.condition_date,
+    this.condition_time,
+    this.conditions,
+    this.stars,
+    this.star_votes,
+    this.summary,
     location_id
   ];
   client.query(SQL, values).catch(console.error);
@@ -324,9 +361,23 @@ const getMeetupAndSave = (request, response) => {
 };
 
 const getTrailsAndSave = (request, response) => {
-  const url = `https://www.hikingproject.com/data/get-trails?lat=${request.query.data.latitude}&lon=${request.query.data.longitude}&maxDistance=10&key=${process.env.TRAILS_API_KEY}`
-
-}
+  const url = `https://www.hikingproject.com/data/get-trails?lat=${
+    request.query.data.latitude
+  }&lon=${request.query.data.longitude}&key=${
+    process.env.TRAILS_API_KEY
+  }&maxDistance=10`;
+  superagent
+    .get(url)
+    .then(result => {
+      const trailResult = result.body.trails.map(element => {
+        const summary = new Trails(element);
+        summary.save(request.query.data.id);
+        return summary;
+      });
+      response.send(trailResult);
+    })
+    .catch(error => handleError(error, response));
+};
 const handleError = (err, res) => {
   console.error(err);
   if (res) res.status(500).send('Sorry, something went wrong');
@@ -350,6 +401,10 @@ app.get('/movies', (request, response) => {
 
 app.get('/meetups', (request, response) => {
   lookup(request, response, 'meetups', cacheHitMeetup, getMeetupAndSave);
+});
+
+app.get('/trails', (request, response) => {
+  lookup(request, response, 'trails', cacheHitTrails, getTrailsAndSave);
 });
 //Waiting on Port
 
